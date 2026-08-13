@@ -1,7 +1,7 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from ..userbot import KIND_CHANNEL, KIND_GROUP, KIND_PRIVATE
+from .userbot import KIND_CHANNEL, KIND_GROUP, KIND_PRIVATE
 
 KIND_ICON = {
     KIND_PRIVATE: "💬",
