@@ -1,11 +1,11 @@
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
 
 from ..config import ADMIN_IDS
 from ..database import db
-from ..keyboards import autokill_kb, login_kb, main_kb
+from ..keyboards import autokill_kb, login_kb, main_kb, phone_kb
 from ..texts import (
     ASK_CODE,
     ASK_PASSWORD,
@@ -51,6 +51,7 @@ async def cb_home(c: CallbackQuery, state: FSMContext):
 async def cb_cancel(c: CallbackQuery, state: FSMContext):
     await state.clear()
     await c.message.edit_text(CANCELED, reply_markup=main_kb(False, False))
+    await c.message.answer("✖️", reply_markup=ReplyKeyboardRemove())
     await c.answer()
 
 
@@ -60,8 +61,30 @@ async def cb_login(c: CallbackQuery, state: FSMContext):
         await c.answer("⛔ Нет доступа.", show_alert=True)
         return
     await state.set_state(LoginFSM.phone)
-    await c.message.edit_text(ASK_PHONE, reply_markup=login_kb())
+    await c.message.edit_text(ASK_PHONE, reply_markup=phone_kb())
     await c.answer()
+
+
+@router.message(LoginFSM.phone, F.contact)
+async def on_contact(message: Message, state: FSMContext):
+    phone = message.contact.phone_number
+    if not phone.startswith("+"):
+        phone = "+" + phone
+    await state.update_data(phone=phone)
+    await _request_code(message, state, phone)
+
+
+async def _request_code(message: Message, state: FSMContext, phone: str):
+    await message.answer(
+        "📲 Код отправлен!", reply_markup=ReplyKeyboardRemove()
+    )
+    try:
+        await cleaner.send_code(phone)
+    except LoginError as exc:
+        await message.answer(LOGIN_FAIL.format(error=exc))
+        return
+    await state.set_state(LoginFSM.code)
+    await message.answer(ASK_CODE, reply_markup=login_kb())
 
 
 @router.message(LoginFSM.phone, F.text)
@@ -70,14 +93,8 @@ async def on_phone(message: Message, state: FSMContext):
     if not phone.startswith("+"):
         await message.answer("❌ Номер должен начинаться с + (например +79991234567).")
         return
-    try:
-        await cleaner.send_code(phone)
-    except LoginError as exc:
-        await message.answer(LOGIN_FAIL.format(error=exc))
-        return
     await state.update_data(phone=phone)
-    await state.set_state(LoginFSM.code)
-    await message.answer(ASK_CODE, reply_markup=login_kb())
+    await _request_code(message, state, phone)
 
 
 @router.message(LoginFSM.code, F.text)
