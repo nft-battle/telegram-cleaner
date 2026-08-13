@@ -3,6 +3,7 @@ import logging
 
 from telethon import TelegramClient
 from telethon.errors import (
+    AuthKeyUnregisteredError,
     PasswordHashInvalidError,
     PhoneCodeExpiredError,
     SessionPasswordNeededError,
@@ -43,11 +44,15 @@ class Cleaner:
 
     @property
     def is_authed(self) -> bool:
-        return self.client is not None and self.client.is_connected()
+        return self.client is not None and self.client.is_connected() and self.client.is_authorized() is True
 
     async def ensure_client(self) -> TelegramClient | None:
         if self.client and self.client.is_connected():
-            return self.client
+            try:
+                if self.client.is_authorized():
+                    return self.client
+            except AuthKeyUnregisteredError:
+                self.client = None
         session_str = await db.get("session")
         if not session_str:
             return None
@@ -56,6 +61,10 @@ class Cleaner:
         try:
             if not await client.is_user_authorized():
                 raise LoginError("Сессия недействительна — войдите заново")
+        except AuthKeyUnregisteredError:
+            await db.set("session", "")
+            await client.disconnect()
+            raise LoginError("Сессия недействительна — войдите заново")
         except Exception:
             await client.disconnect()
             raise
@@ -113,7 +122,18 @@ class Cleaner:
 
     async def me(self) -> dict:
         client = await self.ensure_client()
-        me = await client.get_me()
+        if client is None:
+            raise LoginError("Нет активной сессии — войдите заново")
+        try:
+            me = await client.get_me()
+        except AuthKeyUnregisteredError:
+            await db.set("session", "")
+            self.client = None
+            raise LoginError("Сессия недействительна — войдите заново")
+        if me is None:
+            await db.set("session", "")
+            self.client = None
+            raise LoginError("Сессия недействительна — войдите заново")
         return {
             "first": me.first_name or "",
             "last": me.last_name or "",
@@ -123,7 +143,14 @@ class Cleaner:
 
     async def list_dialogs(self, sort: str = "members") -> list[dict]:
         client = await self.ensure_client()
-        dialogs: list[Dialog] = await client.get_dialogs(limit=200)
+        if client is None:
+            raise LoginError("Нет активной сессии — войдите заново")
+        try:
+            dialogs: list[Dialog] = await client.get_dialogs(limit=200)
+        except AuthKeyUnregisteredError:
+            await db.set("session", "")
+            self.client = None
+            raise LoginError("Сессия недействительна — войдите заново")
         rows = []
         for d in dialogs:
             entity = d.entity
