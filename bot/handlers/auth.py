@@ -61,8 +61,13 @@ async def cb_login(c: CallbackQuery, state: FSMContext):
         await c.answer("⛔ Нет доступа.", show_alert=True)
         return
     await state.set_state(LoginFSM.phone)
-    await c.message.edit_text(ASK_PHONE, reply_markup=phone_kb())
+    await c.message.answer("📞 Введите номер телефона:", reply_markup=phone_kb())
     await c.answer()
+    # leave the welcome message as-is, only mention the flow
+    try:
+        await c.message.edit_text(ASK_PHONE)
+    except Exception:
+        pass
 
 
 @router.message(LoginFSM.phone, F.contact)
