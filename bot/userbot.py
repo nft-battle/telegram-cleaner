@@ -8,8 +8,12 @@ from telethon.errors import (
     SessionPasswordNeededError,
 )
 from telethon.sessions import StringSession
-from telethon.tl.functions.channels import DeleteChannel, LeaveChannel
-from telethon.tl.functions.messages import DeleteChat, DeleteHistory, LeaveChat
+from telethon.tl.functions.channels import DeleteChannelRequest, LeaveChannelRequest
+from telethon.tl.functions.messages import (
+    DeleteChatRequest,
+    DeleteHistoryRequest,
+    LeaveChatRequest,
+)
 from telethon.tl.types import (
     Channel,
     Chat,
@@ -183,24 +187,24 @@ class Cleaner:
         try:
             if kind == KIND_CHANNEL:
                 try:
-                    await client(DeleteChannel(peer))
+                    await client(DeleteChannelRequest(peer))
                 except Exception:
-                    await client(LeaveChannel(peer))
+                    await client(LeaveChannelRequest(peer))
             elif kind == KIND_GROUP:
                 try:
-                    await client(DeleteChat(peer))
+                    await client(DeleteChatRequest(peer))
                 except Exception:
-                    await client(LeaveChat(peer))
+                    await client(LeaveChatRequest(peer))
             elif kind == KIND_PRIVATE:
                 try:
-                    await client(DeleteHistory(peer, max_id=0, revoke=True, just_clear=False))
+                    await client(DeleteHistoryRequest(peer, max_id=0, revoke=True, just_clear=False))
                 except Exception:
                     try:
-                        await client(DeleteChat(peer))
+                        await client(DeleteChatRequest(peer))
                     except Exception:
-                        await client(DeleteHistory(peer, max_id=0, just_clear=True))
+                        await client(DeleteHistoryRequest(peer, max_id=0, just_clear=True))
             else:
-                await client(DeleteHistory(peer, max_id=0, just_clear=True))
+                await client(DeleteHistoryRequest(peer, max_id=0, just_clear=True))
         except Exception as exc:
             logger.exception("Не удалось удалить чат %s", row["id"])
             return f"❌ {row['title']}: {exc}"
