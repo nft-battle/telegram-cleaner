@@ -1,7 +1,11 @@
+import asyncio
+import io
+
+import qrcode
 from aiogram import F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message, ReplyKeyboardRemove
+from aiogram.types import BufferedInputFile, CallbackQuery, Message, ReplyKeyboardRemove
 
 from ..config import ADMIN_IDS
 from ..database import db
@@ -12,9 +16,13 @@ from ..texts import (
     ASK_PHONE,
     CANCELED,
     LOGIN_FAIL,
+    LOGIN_METHOD,
     LOGIN_OK,
     ME_TEXT,
     NOT_AUTORIZED,
+    QR_EXPIRED,
+    QR_NEED_PASSWORD,
+    QR_WAIT,
     WELCOME,
 )
 from ..states import LoginFSM
@@ -60,14 +68,63 @@ async def cb_login(c: CallbackQuery, state: FSMContext):
     if not _is_admin(c.from_user.id):
         await c.answer("⛔ Нет доступа.", show_alert=True)
         return
+    await state.clear()
+    await c.message.edit_text(LOGIN_METHOD, reply_markup=login_kb())
+    await c.answer()
+
+
+@router.callback_query(F.data == "login:phone")
+async def cb_login_phone(c: CallbackQuery, state: FSMContext):
     await state.set_state(LoginFSM.phone)
     await c.message.answer("📞 Введите номер телефона:", reply_markup=phone_kb())
     await c.answer()
-    # leave the welcome message as-is, only mention the flow
+
+
+def _qr_png(url: str) -> BufferedInputFile:
+    img = qrcode.make(url)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return BufferedInputFile(buf.read(), filename="qr.png")
+
+
+@router.callback_query(F.data == "login:qr")
+async def cb_login_qr(c: CallbackQuery, state: FSMContext):
+    if not _is_admin(c.from_user.id):
+        await c.answer("⛔ Нет доступа.", show_alert=True)
+        return
+    await state.clear()
+    await c.answer()
     try:
-        await c.message.edit_text(ASK_PHONE)
-    except Exception:
-        pass
+        url = await cleaner.qr_login()
+    except LoginError as exc:
+        await c.message.answer(LOGIN_FAIL.format(error=exc))
+        return
+    photo = await c.message.answer_photo(_qr_png(url), caption=QR_WAIT)
+    while True:
+        status = await cleaner.qr_wait()
+        if status == "ok":
+            me = await cleaner.me()
+            await photo.edit_caption(
+                LOGIN_OK.format(
+                    info=f"👤 {me['first']} {me['last']} · @{me['username']} · {me['phone']}"
+                )
+            )
+            return
+        if status == "password":
+            await state.set_state(LoginFSM.password)
+            await c.message.answer(QR_NEED_PASSWORD, reply_markup=login_kb())
+            return
+        # waiting: QR мог истечь (30 сек) — обновляем
+        await asyncio.sleep(2)
+        try:
+            url = await cleaner.qr_new()
+        except LoginError as exc:
+            await c.message.answer(LOGIN_FAIL.format(error=exc))
+            return
+        from aiogram.types import InputMediaPhoto
+
+        await photo.edit_media(InputMediaPhoto(media=_qr_png(url)))
 
 
 @router.message(LoginFSM.phone, F.contact)

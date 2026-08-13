@@ -83,6 +83,48 @@ class Cleaner:
             self.client = client
             return client
 
+    async def qr_login(self) -> str:
+        """Запускает QR-вход, возвращает URL для рисования QR-кода."""
+        async with self._login_lock:
+            client = TelegramClient(StringSession(), API_ID, API_HASH)
+            await client.connect()
+            qr = await client.qr_login()
+            self.client = client
+            self._qr = qr
+            return qr.url
+
+    @property
+    def qr(self):
+        return getattr(self, "_qr", None)
+
+    async def qr_wait(self) -> str:
+        """Ждёт сканирования QR (до 25 сек). 'ok' | 'password' | 'waiting'."""
+        qr = self.qr
+        if qr is None:
+            raise LoginError("QR-вход не начат")
+        try:
+            user = await qr.wait(timeout=25)
+        except SessionPasswordNeededError:
+            return "password"
+        except asyncio.TimeoutError:
+            return "waiting"
+        except Exception as exc:
+            raise LoginError(f"Ошибка QR: {exc}")
+        await self._persist()
+        return "ok"
+
+    async def qr_new(self) -> str:
+        """Генерирует свежий QR, возвращает URL."""
+        qr = self.qr
+        if qr is None:
+            raise LoginError("QR-вход не начат")
+        try:
+            await qr.recreate()
+        except Exception:
+            qr = await self.client.qr_login()
+            self._qr = qr
+        return qr.url
+
     async def submit_code(self, phone: str, code: str) -> bool:
         """True = нужен пароль 2FA, False = вошли."""
         if not self.client:

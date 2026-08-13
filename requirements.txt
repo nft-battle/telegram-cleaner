@@ -4,3 +4,4 @@ aiohttp>=3.9,<4
 python-dotenv>=1.0
 aiosqlite>=0.20
 asyncpg>=0.29
+qrcode[pil]>=7.4

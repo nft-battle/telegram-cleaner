@@ -30,6 +30,8 @@ def main_kb(authed: bool, autokill: bool) -> InlineKeyboardMarkup:
 
 def login_kb() -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
+    b.row(InlineKeyboardButton(text="📱 Войти по номеру", callback_data="login:phone"))
+    b.row(InlineKeyboardButton(text="🖼 Войти по QR-коду", callback_data="login:qr"))
     b.row(InlineKeyboardButton(text="✖️ Отмена", callback_data="cancel"))
     return b.as_markup()
 
