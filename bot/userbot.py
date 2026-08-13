@@ -12,7 +12,6 @@ from telethon.tl.functions.channels import DeleteChannelRequest, LeaveChannelReq
 from telethon.tl.functions.messages import (
     DeleteChatRequest,
     DeleteHistoryRequest,
-    LeaveChatRequest,
 )
 from telethon.tl.types import (
     Channel,
@@ -194,7 +193,7 @@ class Cleaner:
                 try:
                     await client(DeleteChatRequest(peer))
                 except Exception:
-                    await client(LeaveChatRequest(peer))
+                    await client.kick_participant(peer, "me")
             elif kind == KIND_PRIVATE:
                 try:
                     await client(DeleteHistoryRequest(peer, max_id=0, revoke=True, just_clear=False))
