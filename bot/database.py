@@ -1,3 +1,5 @@
+from typing import Set
+
 from .config import DATABASE_URL, DB_PATH
 
 _schema_sqlite = """
@@ -144,7 +146,7 @@ class Database:
             (chat_id, _now()),
         )
 
-    async def removed_ids(self) -> set[int]:
+    async def removed_ids(self) -> Set[int]:
         rows = await self.adapter.fetchall("SELECT chat_id FROM removed")
         return {int(r["chat_id"]) for r in rows}
 
