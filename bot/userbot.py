@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 KIND_PRIVATE = "private"
 KIND_GROUP = "group"
 KIND_CHANNEL = "channel"
+KIND_BOT = "bot"
 KIND_UNKNOWN = "unknown"
 
 
@@ -213,7 +214,7 @@ class Cleaner:
                 title = entity.title or ""
                 members = entity.participants_count or 0
             elif isinstance(entity, User):
-                kind = KIND_PRIVATE
+                kind = KIND_BOT if getattr(entity, "bot", False) else KIND_PRIVATE
                 title = d.name or (entity.first_name or "") + " " + (entity.last_name or "")
                 members = 0
             else:
@@ -270,7 +271,7 @@ class Cleaner:
                     await client(DeleteChatRequest(peer))
                 except Exception:
                     await client.kick_participant(peer, "me")
-            elif kind == KIND_PRIVATE:
+            elif kind == KIND_PRIVATE or kind == KIND_BOT:
                 try:
                     await client(DeleteHistoryRequest(peer, max_id=0, revoke=True, just_clear=False))
                 except Exception:

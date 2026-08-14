@@ -7,12 +7,13 @@ from aiogram.types import (
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from .userbot import KIND_CHANNEL, KIND_GROUP, KIND_PRIVATE
+from .userbot import KIND_BOT, KIND_CHANNEL, KIND_GROUP, KIND_PRIVATE
 
 WEBAPP_URL = "https://telegram-cleaner-klni.onrender.com/app"
 
 KIND_ICON = {
     KIND_PRIVATE: "💬",
+    KIND_BOT: "🤖",
     KIND_GROUP: "👥",
     KIND_CHANNEL: "📢",
 }

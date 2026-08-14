@@ -307,7 +307,7 @@
 
   /* ---------- СПИСОК ---------- */
 
-  const ICONS = { private: "💬", group: "👥", channel: "📢" };
+  const ICONS = { private: "💬", group: "👥", channel: "📢", bot: "🤖" };
 
   q("#listBtn").onclick = () => {
     state.selected.clear();
@@ -360,6 +360,7 @@
   const SECTIONS = [
     { key: "channel", title: "📢 Каналы" },
     { key: "group", title: "👥 Группы" },
+    { key: "bot", title: "🤖 Боты" },
     { key: "private", title: "💬 Личные сообщения" },
   ];
 
