@@ -42,14 +42,10 @@ class Cleaner:
         self._login_lock = asyncio.Lock()
         self._entities: dict[int, object] = {}
 
-    @property
-    def is_authed(self) -> bool:
-        return self.client is not None and self.client.is_connected() and self.client.is_authorized() is True
-
     async def ensure_client(self) -> TelegramClient | None:
         if self.client and self.client.is_connected():
             try:
-                if self.client.is_authorized():
+                if await self.client.is_user_authorized():
                     return self.client
             except AuthKeyUnregisteredError:
                 self.client = None
@@ -113,13 +109,15 @@ class Cleaner:
         await self._persist()
         return "ok"
 
-    async def qr_new(self) -> str:
-        """Генерирует свежий QR, возвращает URL."""
+    async def qr_new(self) -> str | None:
+        """Генерирует свежий QR, возвращает URL или None, если нужен пароль 2FA."""
         qr = self.qr
         if qr is None:
             raise LoginError("QR-вход не начат")
         try:
             await qr.recreate()
+        except SessionPasswordNeededError:
+            return None
         except Exception:
             qr = await self.client.qr_login()
             self._qr = qr

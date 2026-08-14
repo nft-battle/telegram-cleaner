@@ -122,6 +122,10 @@ async def cb_login_qr(c: CallbackQuery, state: FSMContext):
         except LoginError as exc:
             await c.message.answer(LOGIN_FAIL.format(error=exc))
             return
+        if url is None:
+            await state.set_state(LoginFSM.password)
+            await c.message.answer(QR_NEED_PASSWORD, reply_markup=login_kb())
+            return
         from aiogram.types import InputMediaPhoto
 
         await photo.edit_media(InputMediaPhoto(media=_qr_png(url)))
