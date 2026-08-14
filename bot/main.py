@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import os
+from pathlib import Path
 
 from aiohttp import web
 from aiogram import Bot, Dispatcher
@@ -10,15 +12,22 @@ from .config import BOT_TOKEN, PORT
 from .database import db
 from .handlers import auth, dialogs
 from .userbot import cleaner
+from .webapp import make_app as make_webapp_api
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
 )
 logger = logging.getLogger(__name__)
 
+WEBAPP_DIR = Path(__file__).parent / "webapp"
+
 
 async def _health(request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
+
+
+async def _app_index(request: web.Request) -> web.StreamResponse:
+    return web.FileResponse(WEBAPP_DIR / "index.html")
 
 
 async def _autosweep(interval: int = 1800) -> None:
@@ -46,6 +55,9 @@ async def main() -> None:
     app = web.Application()
     app.router.add_get("/", _health)
     app.router.add_get("/health", _health)
+    app.router.add_get("/app", _app_index)
+    app.router.add_static("/static/", WEBAPP_DIR, show_index=False)
+    app.add_subapp("/api", make_webapp_api())
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", PORT)

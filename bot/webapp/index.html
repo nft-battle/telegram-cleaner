@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>TG Cleaner</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo">🧹<span>TG Cleaner</span></div>
+    <div class="theme-toggle" id="themeToggle" title="Тема">🌙</div>
+  </header>
+
+  <!-- ЭКРАН: вход -->
+  <section id="screen-login" class="screen">
+    <div class="card">
+      <h2>Вход в аккаунт</h2>
+      <p>Открой Telegram на телефоне → <b>Настройки</b> → <b>Устройства</b> → <b>Привязать устройство</b> и отсканируй код.</p>
+    </div>
+    <div class="qr-wrap">
+      <div id="qr-holder"><img id="qr-img" alt="QR"></div>
+      <div class="qr-timer" id="qrTimer"></div>
+    </div>
+    <div id="qr-status" class="qr-status">Загружаю QR-код...</div>
+    <button class="btn ghost" id="qrRefreshBtn">🔄 Обновить код</button>
+  </section>
+
+  <!-- ЭКРАН: пароль 2FA -->
+  <section id="screen-password" class="screen hidden">
+    <div class="card">
+      <h2>🔐 Облачный пароль</h2>
+      <p>В аккаунте включён пароль 2FA. Введите его:</p>
+      <input type="password" id="passwordInput" placeholder="Пароль 2FA">
+      <button class="btn" id="passwordBtn">Войти</button>
+      <div id="passwordError" class="error hidden"></div>
+    </div>
+  </section>
+
+  <!-- ЭКРАН: меню -->
+  <section id="screen-main" class="screen hidden">
+    <div class="card user-card" id="userCard">
+      <div class="avatar" id="avatar">👤</div>
+      <div>
+        <div class="user-name" id="userName">...</div>
+        <div class="user-sub" id="userSub">...</div>
+      </div>
+    </div>
+    <div class="stats" id="statsRow">
+      <div class="stat"><b id="statTotal">0</b><span>диалогов</span></div>
+      <div class="stat"><b id="statUnread">0</b><span>непрочитанных</span></div>
+      <div class="stat"><b id="statRemoved">0</b><span>удалено</span></div>
+    </div>
+    <div class="autokill-card" id="autokillCard">
+      <div>
+        <b>🧹 Авто-уборка</b>
+        <p>Удалённые чаты убираются снова, если вернутся.</p>
+      </div>
+      <label class="switch"><input type="checkbox" id="autokillToggle"><span class="slider"></span></label>
+    </div>
+    <button class="btn primary" id="listBtn">📋 Список диалогов</button>
+    <button class="btn danger ghost" id="logoutBtn">Выйти из аккаунта</button>
+  </section>
+
+  <!-- ЭКРАН: список -->
+  <section id="screen-list" class="screen hidden">
+    <div class="toolbar">
+      <button class="btn icon" id="backBtn">←</button>
+      <div class="sort-tabs" id="sortTabs">
+        <button data-sort="members" class="tab active">👥</button>
+        <button data-sort="unread" class="tab">🔔</button>
+        <button data-sort="activity" class="tab">🕒</button>
+        <button data-sort="name" class="tab">🔤</button>
+        <button data-sort="type" class="tab">🗂</button>
+      </div>
+      <button class="btn icon" id="selectAllBtn" title="Выбрать всё">☑</button>
+    </div>
+    <div id="list" class="list"></div>
+    <div class="bottom-bar hidden" id="deleteBar">
+      <span id="delCount">Выбрано: 0</span>
+      <button class="btn danger" id="deleteBtn">🗑 Удалить</button>
+    </div>
+    <div id="toast" class="toast hidden"></div>
+  </section>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

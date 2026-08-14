@@ -3,10 +3,13 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     KeyboardButton,
     ReplyKeyboardMarkup,
+    WebAppInfo,
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from .userbot import KIND_CHANNEL, KIND_GROUP, KIND_PRIVATE
+
+WEBAPP_URL = "https://telegram-cleaner-klni.onrender.com/app"
 
 KIND_ICON = {
     KIND_PRIVATE: "💬",
@@ -17,6 +20,12 @@ KIND_ICON = {
 
 def main_kb(authed: bool, autokill: bool) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
+    b.row(
+        InlineKeyboardButton(
+            text="🚀 Открыть приложение",
+            web_app=WebAppInfo(url=WEBAPP_URL),
+        )
+    )
     if authed:
         b.row(
             InlineKeyboardButton(text="📋 Список диалогов", callback_data="dlg:list:members:1"),
