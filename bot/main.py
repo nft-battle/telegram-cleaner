@@ -11,7 +11,7 @@ from aiogram.enums import ParseMode
 from .config import BOT_TOKEN, PORT
 from .database import db
 from .handlers import auth, dialogs
-from .userbot import cleaner
+from .userbot import cleaners
 from .webapp import make_app as make_webapp_api
 
 logging.basicConfig(
@@ -34,10 +34,11 @@ async def _autosweep(interval: int = 1800) -> None:
     while True:
         await asyncio.sleep(interval)
         try:
-            if await db.get("autokill") == "1":
-                results = await cleaner.sweep_removed()
-                if results:
-                    logger.info("Авто-уборка: %d чатов обработано", len(results))
+            for uid in await db.users():
+                if await db.get(db.autokill_key(uid)) == "1":
+                    results = await cleaners.get(uid).sweep_removed()
+                    if results:
+                        logger.info("Авто-уборка (uid=%s): %d чатов обработано", uid, len(results))
         except Exception:
             logger.exception("Ошибка авто-уборки")
 

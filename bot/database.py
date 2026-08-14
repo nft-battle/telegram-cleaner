@@ -8,8 +8,10 @@ CREATE TABLE IF NOT EXISTS kv (
     value TEXT DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS removed (
-    chat_id BIGINT PRIMARY KEY,
-    removed_at TEXT DEFAULT ''
+    user_id BIGINT NOT NULL DEFAULT 0,
+    chat_id BIGINT NOT NULL,
+    removed_at TEXT DEFAULT '',
+    PRIMARY KEY (user_id, chat_id)
 );
 """
 
@@ -19,8 +21,10 @@ CREATE TABLE IF NOT EXISTS kv (
     value TEXT DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS removed (
-    chat_id BIGINT PRIMARY KEY,
-    removed_at TEXT DEFAULT ''
+    user_id BIGINT NOT NULL DEFAULT 0,
+    chat_id BIGINT NOT NULL,
+    removed_at TEXT DEFAULT '',
+    PRIMARY KEY (user_id, chat_id)
 );
 """
 
@@ -46,6 +50,13 @@ class _Sqlite:
     async def init(self):
         async with self._aiosqlite.connect(self.path) as db:
             await db.executescript(_schema_sqlite)
+            try:
+                await db.execute("ALTER TABLE removed ADD COLUMN user_id BIGINT NOT NULL DEFAULT 0")
+                await db.execute("ALTER TABLE removed DROP COLUMN IF EXISTS _unused")
+                await db.commit()
+            except Exception:
+                pass
+            await db.execute("DELETE FROM removed WHERE user_id IS NULL")
             await db.commit()
 
     async def execute(self, sql, params=()):
@@ -94,6 +105,17 @@ class _Pg:
         pool = await self.pool()
         async with pool.acquire() as con:
             await con.execute(_schema_pg)
+            cols = [r["column_name"] for r in await con.fetch(
+                "SELECT column_name FROM information_schema.columns WHERE table_name='removed'"
+            )]
+            if "user_id" not in cols:
+                await con.execute("ALTER TABLE removed ADD COLUMN user_id BIGINT NOT NULL DEFAULT 0")
+            await con.execute(
+                "ALTER TABLE removed DROP CONSTRAINT IF EXISTS removed_pkey"
+            )
+            await con.execute(
+                "ALTER TABLE removed ADD PRIMARY KEY (user_id, chat_id)"
+            )
 
     async def execute(self, sql, params=()):
         pool = await self.pool()
@@ -139,16 +161,36 @@ class Database:
             (key, value),
         )
 
-    async def add_removed(self, chat_id: int) -> None:
+    def session_key(self, user_id: int) -> str:
+        return f"session:{user_id}"
+
+    def autokill_key(self, user_id: int) -> str:
+        return f"autokill:{user_id}"
+
+    async def add_removed(self, user_id: int, chat_id: int) -> None:
         await self.adapter.execute(
-            "INSERT INTO removed(chat_id, removed_at) VALUES(?,?) "
-            "ON CONFLICT(chat_id) DO UPDATE SET removed_at=excluded.removed_at",
-            (chat_id, _now()),
+            "INSERT INTO removed(user_id, chat_id, removed_at) VALUES(?,?,?) "
+            "ON CONFLICT(user_id, chat_id) DO UPDATE SET removed_at=excluded.removed_at",
+            (user_id, chat_id, _now()),
         )
 
-    async def removed_ids(self) -> Set[int]:
-        rows = await self.adapter.fetchall("SELECT chat_id FROM removed")
+    async def removed_ids(self, user_id: int) -> Set[int]:
+        rows = await self.adapter.fetchall(
+            "SELECT chat_id FROM removed WHERE user_id=?", (user_id,)
+        )
         return {int(r["chat_id"]) for r in rows}
+
+    async def users(self) -> list[int]:
+        rows = await self.adapter.fetchall("SELECT user_id FROM removed GROUP BY user_id")
+        ids = {int(r["user_id"]) for r in rows}
+        for k in ("session:", "autokill:"):
+            keys = await self.adapter.fetchall("SELECT key FROM kv WHERE key LIKE ?", (k + "%",))
+            for r in keys:
+                try:
+                    ids.add(int(r["key"][len(k) :]))
+                except ValueError:
+                    pass
+        return sorted(ids)
 
     async def close(self) -> None:
         if isinstance(self._adapter, _Pg) and self._adapter._pool is not None:

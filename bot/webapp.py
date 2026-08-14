@@ -7,14 +7,13 @@ import logging
 import qrcode
 from aiohttp import web
 
-from .config import ADMIN_IDS
 from .database import db
-from .userbot import LoginError, cleaner
+from .userbot import LoginError, cleaners
 
 logger = logging.getLogger(__name__)
 
-_qr_task: asyncio.Task | None = None
-_qr_result: str = "none"  # none | waiting | password | ok
+_qr_tasks: dict[int, asyncio.Task] = {}
+_qr_results: dict[int, str] = {}
 
 
 def _json(data, status: int = 200) -> web.Response:
@@ -28,44 +27,45 @@ def _qr_png_b64(url: str) -> str:
     return base64.b64encode(buf.getvalue()).decode()
 
 
-def _admin_ok(user_id: int) -> bool:
-    return user_id in ADMIN_IDS
+def _cl(user_id: int):
+    return cleaners.get(user_id)
 
 
-async def _qr_waiter() -> None:
-    """Крутится в фоне: ждёт сканирования, пишет результат в _qr_result."""
-    global _qr_result
-    _qr_result = "waiting"
+async def _qr_waiter(user_id: int) -> None:
+    """Крутится в фоне: ждёт сканирования, пишет результат для этого пользователя."""
+    cleaner = _cl(user_id)
+    _qr_results[user_id] = "waiting"
     while True:
         try:
             status = await cleaner.qr_wait()
         except LoginError as exc:
-            _qr_result = f"error:{exc}"
+            _qr_results[user_id] = f"error:{exc}"
             return
         if status == "ok":
-            _qr_result = "ok"
+            _qr_results[user_id] = "ok"
             return
         if status == "password":
-            _qr_result = "password"
+            _qr_results[user_id] = "password"
             return
         # waiting — проверяем, не умер ли QR
-        qr = cleaner.qr
-        if qr is None:
+        if cleaner.qr is None:
             return
         await asyncio.sleep(2)
 
 
-def _start_waiter() -> None:
-    global _qr_task
-    if _qr_task and not _qr_task.done():
-        _qr_task.cancel()
-    _qr_task = asyncio.get_event_loop().create_task(_qr_waiter())
+def _start_waiter(user_id: int) -> None:
+    task = _qr_tasks.get(user_id)
+    if task and not task.done():
+        task.cancel()
+    _qr_tasks[user_id] = asyncio.get_event_loop().create_task(_qr_waiter(user_id))
+
+
+def _uid(request: web.Request) -> int:
+    return int(request.query.get("user_id", "0"))
 
 
 async def api_me(request: web.Request) -> web.Response:
-    user_id = int(request.query.get("user_id", "0"))
-    if not _admin_ok(user_id):
-        return _json({"ok": False, "error": "no access"}, 403)
+    cleaner = _cl(_uid(request))
     try:
         client = await cleaner.ensure_client()
     except LoginError as exc:
@@ -80,43 +80,37 @@ async def api_me(request: web.Request) -> web.Response:
 
 
 async def api_qr_start(request: web.Request) -> web.Response:
-    user_id = int(request.query.get("user_id", "0"))
-    if not _admin_ok(user_id):
-        return _json({"ok": False, "error": "no access"}, 403)
+    user_id = _uid(request)
+    cleaner = _cl(user_id)
     try:
         url = await cleaner.qr_login()
     except Exception as exc:
         return _json({"ok": False, "error": str(exc)})
-    _start_waiter()
+    _start_waiter(user_id)
     return _json({"ok": True, "qr": _qr_png_b64(url)})
 
 
 async def api_qr_refresh(request: web.Request) -> web.Response:
-    user_id = int(request.query.get("user_id", "0"))
-    if not _admin_ok(user_id):
-        return _json({"ok": False, "error": "no access"}, 403)
+    user_id = _uid(request)
+    cleaner = _cl(user_id)
     try:
         url = await cleaner.qr_new()
     except LoginError as exc:
         return _json({"ok": False, "error": str(exc)})
     if url is None:
-        _qr_result = "password"
+        _qr_results[user_id] = "password"
         return _json({"ok": True, "qr": None})
-    _start_waiter()
+    _start_waiter(user_id)
     return _json({"ok": True, "qr": _qr_png_b64(url)})
 
 
 async def api_qr_status(request: web.Request) -> web.Response:
-    user_id = int(request.query.get("user_id", "0"))
-    if not _admin_ok(user_id):
-        return _json({"ok": False, "error": "no access"}, 403)
-    return _json({"ok": True, "status": _qr_result})
+    user_id = _uid(request)
+    return _json({"ok": True, "status": _qr_results.get(user_id, "none")})
 
 
 async def api_login_password(request: web.Request) -> web.Response:
-    user_id = int(request.query.get("user_id", "0"))
-    if not _admin_ok(user_id):
-        return _json({"ok": False, "error": "no access"}, 403)
+    cleaner = _cl(_uid(request))
     try:
         payload = await request.json()
     except Exception:
@@ -129,30 +123,25 @@ async def api_login_password(request: web.Request) -> web.Response:
 
 
 async def api_logout(request: web.Request) -> web.Response:
-    user_id = int(request.query.get("user_id", "0"))
-    if not _admin_ok(user_id):
-        return _json({"ok": False, "error": "no access"}, 403)
-    await cleaner.logout()
+    await _cl(_uid(request)).logout()
     return _json({"ok": True})
 
 
 async def api_dialogs(request: web.Request) -> web.Response:
-    user_id = int(request.query.get("user_id", "0"))
-    if not _admin_ok(user_id):
-        return _json({"ok": False, "error": "no access"}, 403)
+    user_id = _uid(request)
+    cleaner = _cl(user_id)
     sort = request.query.get("sort", "members")
     try:
         rows = await cleaner.list_dialogs(sort)
     except LoginError as exc:
         return _json({"ok": False, "error": str(exc)})
-    removed = await db.removed_ids()
+    removed = await db.removed_ids(user_id)
     return _json({"ok": True, "rows": rows, "removed": len(removed)})
 
 
 async def api_remove(request: web.Request) -> web.Response:
-    user_id = int(request.query.get("user_id", "0"))
-    if not _admin_ok(user_id):
-        return _json({"ok": False, "error": "no access"}, 403)
+    user_id = _uid(request)
+    cleaner = _cl(user_id)
     try:
         payload = await request.json()
     except Exception:
@@ -178,17 +167,16 @@ async def api_remove(request: web.Request) -> web.Response:
 
 
 async def api_autokill(request: web.Request) -> web.Response:
-    user_id = int(request.query.get("user_id", "0"))
-    if not _admin_ok(user_id):
-        return _json({"ok": False, "error": "no access"}, 403)
+    user_id = _uid(request)
+    key = db.autokill_key(user_id)
     if request.method == "POST":
         try:
             payload = await request.json()
         except Exception:
             payload = None
         if payload is not None and "enabled" in payload:
-            await db.set("autokill", "1" if payload["enabled"] else "0")
-    enabled = await db.get("autokill") == "1"
+            await db.set(key, "1" if payload["enabled"] else "0")
+    enabled = await db.get(key) == "1"
     return _json({"ok": True, "enabled": enabled})
 
 

@@ -13,7 +13,7 @@ from ..keyboards import (
     dlg_sort_kb,
 )
 from ..texts import BULK_CONFIRM, BULK_DONE, DLG_HEADER, DLG_ROW, NOT_AUTORIZED
-from ..userbot import cleaner
+from ..userbot import cleaners
 
 router = Router()
 
@@ -34,15 +34,19 @@ def _fmt_date(ts: int) -> str:
     return datetime.fromtimestamp(ts).strftime("%d.%m %H:%M")
 
 
+def _cl(c: CallbackQuery):
+    return cleaners.get(c.from_user.id)
+
+
 async def _ensure(c: CallbackQuery) -> bool:
-    if not await cleaner.ensure_client():
+    if not await _cl(c).ensure_client():
         await c.answer(NOT_AUTORIZED, show_alert=True)
         return False
     return True
 
 
 async def _send_list(c: CallbackQuery, sort: str, page: int):
-    rows = await cleaner.list_dialogs(sort)
+    rows = await _cl(c).list_dialogs(sort)
     total_pages = max(1, (len(rows) + PAGE_SIZE - 1) // PAGE_SIZE)
     page = min(max(1, page), total_pages)
     start = (page - 1) * PAGE_SIZE
@@ -113,7 +117,7 @@ async def cb_one(c: CallbackQuery):
     kb = confirm_kb("one", [chat_id])
     name = ""
     try:
-        rows = await cleaner.list_dialogs("name")
+        rows = await _cl(c).list_dialogs("name")
         name = next((r["title"] for r in rows if r["id"] == chat_id), "")
     except Exception:
         pass
@@ -133,7 +137,7 @@ async def cb_bulk(c: CallbackQuery):
         await c.answer("Нет выбранных чатов", show_alert=True)
         return
     if c.data == "dlg:bulk:confirm":
-        rows = await cleaner.list_dialogs("name")
+        rows = await _cl(c).list_dialogs("name")
         names = []
         for r in rows:
             if r["id"] in sel:
@@ -160,12 +164,12 @@ async def cb_do(c: CallbackQuery):
     for chat_id in ids:
         row = None
         try:
-            rows = await cleaner.list_dialogs("name")
+            rows = await _cl(c).list_dialogs("name")
             row = next((r for r in rows if r["id"] == chat_id), {"id": chat_id, "title": str(chat_id), "kind": "unknown"})
         except Exception:
             row = {"id": chat_id, "title": str(chat_id), "kind": "unknown"}
         try:
-            res = await cleaner.remove_chat(row)
+            res = await _cl(c).remove_chat(row)
         except Exception as exc:
             res = f"❌ {row['title']}: {exc}"
         results.append(res)

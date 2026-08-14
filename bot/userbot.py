@@ -37,10 +37,15 @@ class LoginError(Exception):
 
 
 class Cleaner:
-    def __init__(self):
+    def __init__(self, user_id: int):
+        self.user_id = user_id
         self.client = None
         self._login_lock = asyncio.Lock()
         self._entities: dict[int, object] = {}
+
+    @property
+    def _session_key(self) -> str:
+        return db.session_key(self.user_id)
 
     async def ensure_client(self) -> TelegramClient | None:
         if self.client and self.client.is_connected():
@@ -49,7 +54,7 @@ class Cleaner:
                     return self.client
             except AuthKeyUnregisteredError:
                 self.client = None
-        session_str = await db.get("session")
+        session_str = await db.get(self._session_key)
         if not session_str:
             return None
         client = TelegramClient(StringSession(session_str), API_ID, API_HASH)
@@ -58,7 +63,7 @@ class Cleaner:
             if not await client.is_user_authorized():
                 raise LoginError("Сессия недействительна — войдите заново")
         except AuthKeyUnregisteredError:
-            await db.set("session", "")
+            await db.set(self._session_key, "")
             await client.disconnect()
             raise LoginError("Сессия недействительна — войдите заново")
         except Exception:
@@ -148,7 +153,7 @@ class Cleaner:
             raise LoginError("Неверный пароль 2FA")
 
     async def _persist(self):
-        await db.set("session", self.client.session.save())
+        await db.set(self._session_key, self.client.session.save())
 
     async def logout(self) -> None:
         if self.client:
@@ -158,7 +163,7 @@ class Cleaner:
                 pass
             await self.client.disconnect()
             self.client = None
-        await db.set("session", "")
+        await db.set(self._session_key, "")
 
     async def me(self) -> dict:
         client = await self.ensure_client()
@@ -167,11 +172,11 @@ class Cleaner:
         try:
             me = await client.get_me()
         except AuthKeyUnregisteredError:
-            await db.set("session", "")
+            await db.set(self._session_key, "")
             self.client = None
             raise LoginError("Сессия недействительна — войдите заново")
         if me is None:
-            await db.set("session", "")
+            await db.set(self._session_key, "")
             self.client = None
             raise LoginError("Сессия недействительна — войдите заново")
         return {
@@ -188,14 +193,18 @@ class Cleaner:
         try:
             dialogs: list[Dialog] = await client.get_dialogs(limit=200)
         except AuthKeyUnregisteredError:
-            await db.set("session", "")
+            await db.set(self._session_key, "")
             self.client = None
             raise LoginError("Сессия недействительна — войдите заново")
         rows = []
         for d in dialogs:
             entity = d.entity
             self._entities[d.id] = entity
-            if isinstance(entity, Channel):
+            if isinstance(entity, Channel) and getattr(entity, "megagroup", False):
+                kind = KIND_GROUP
+                title = entity.title or ""
+                members = entity.participants_count or 0
+            elif isinstance(entity, Channel):
                 kind = KIND_CHANNEL
                 title = entity.title or ""
                 members = entity.participants_count or 0
@@ -274,14 +283,14 @@ class Cleaner:
         except Exception as exc:
             logger.exception("Не удалось удалить чат %s", row["id"])
             return f"❌ {row['title']}: {exc}"
-        await db.add_removed(row["id"])
+        await db.add_removed(self.user_id, row["id"])
         return f"✅ {row['title']}"
 
     async def sweep_removed(self) -> list[str]:
         """Авто-уборка: чаты из списка removed удаляются снова, если вернулись."""
         if not await self.ensure_client():
             return []
-        removed = await db.removed_ids()
+        removed = await db.removed_ids(self.user_id)
         if not removed:
             return []
         dialogs = await self.list_dialogs("activity")
@@ -295,4 +304,16 @@ class Cleaner:
         return results
 
 
-cleaner = Cleaner()
+class CleanerPool:
+    """По одному Cleaner на пользователя бота."""
+
+    def __init__(self):
+        self._items: dict[int, Cleaner] = {}
+
+    def get(self, user_id: int) -> Cleaner:
+        if user_id not in self._items:
+            self._items[user_id] = Cleaner(user_id)
+        return self._items[user_id]
+
+
+cleaners = CleanerPool()
