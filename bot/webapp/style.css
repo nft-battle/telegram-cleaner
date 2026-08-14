@@ -136,3 +136,16 @@ input[type="password"] {
   background:var(--bg); color:var(--text); font-size:16px; margin:10px 0 4px; outline:none;
 }
 input[type="password"]:focus { border-color:var(--accent); }
+
+.login-tabs { display:flex; gap:8px; margin-top:12px; }
+.ltab {
+  flex:1; padding:9px 0; background:none; border:1px solid var(--border);
+  border-radius:10px; color:var(--sub); font-size:14px; cursor:pointer;
+}
+.ltab.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+
+#loginPhoneBlock input[type="tel"], #loginPhoneBlock input[type="text"] {
+  width:100%; padding:12px; border:1px solid var(--border); border-radius:12px;
+  background:var(--bg); color:var(--text); font-size:16px; margin:10px 0 4px; outline:none;
+}
+#loginPhoneBlock input:focus { border-color:var(--accent); }

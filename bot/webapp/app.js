@@ -25,6 +25,7 @@
     selected: new Set(),
     qrTimer: null,
     qrExpiresAt: 0,
+    loginMethod: "qr",
   };
 
   function show(screenName) {
@@ -145,6 +146,90 @@
 
   q("#qrRefreshBtn").onclick = refreshQr;
 
+  /* ---------- ВХОД (ТАБЫ QR / НОМЕР) ---------- */
+
+  function resetPhoneLogin() {
+    q("#phoneSendBtn").disabled = false;
+    q("#codeInput").classList.add("hidden");
+    q("#codeBtn").classList.add("hidden");
+    q("#phoneError").classList.add("hidden");
+    q("#phoneInput").value = "";
+    q("#codeInput").value = "";
+  }
+
+  function switchLoginMethod(m) {
+    state.loginMethod = m;
+    q("#tabQr").classList.toggle("active", m === "qr");
+    q("#tabPhone").classList.toggle("active", m === "phone");
+    q("#loginQrBlock").classList.toggle("hidden", m !== "qr");
+    q("#loginPhoneBlock").classList.toggle("hidden", m !== "phone");
+    if (m === "qr") {
+      resetPhoneLogin();
+      loadQr();
+    } else {
+      clearInterval(state.qrTimer);
+    }
+  }
+
+  q("#tabQr").onclick = () => switchLoginMethod("qr");
+  q("#tabPhone").onclick = () => switchLoginMethod("phone");
+
+  /* ---------- ВХОД ПО НОМЕРУ ---------- */
+
+  q("#phoneSendBtn").onclick = async () => {
+    const err = q("#phoneError");
+    err.classList.add("hidden");
+    const phone = q("#phoneInput").value.trim();
+    if (!phone) {
+      err.textContent = "Введите номер телефона";
+      err.classList.remove("hidden");
+      return;
+    }
+    try {
+      await api("/login/phone?user_id=" + USER_ID, {
+        method: "POST",
+        body: JSON.stringify({ phone }),
+      });
+      q("#phoneSendBtn").disabled = true;
+      q("#phoneSendBtn").textContent = "📲 Код отправлен";
+      q("#codeInput").classList.remove("hidden");
+      q("#codeBtn").classList.remove("hidden");
+      q("#codeInput").focus();
+    } catch (e) {
+      err.textContent = e.message;
+      err.classList.remove("hidden");
+    }
+  };
+
+  q("#codeBtn").onclick = async () => {
+    const err = q("#phoneError");
+    err.classList.add("hidden");
+    try {
+      const data = await api("/login/code?user_id=" + USER_ID, {
+        method: "POST",
+        body: JSON.stringify({
+          phone: q("#phoneInput").value.trim(),
+          code: q("#codeInput").value.trim(),
+        }),
+      });
+      if (data.need_password) {
+        showPassword();
+        return;
+      }
+      await boot();
+    } catch (e) {
+      err.textContent = e.message;
+      err.classList.remove("hidden");
+    }
+  };
+
+  q("#phoneInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") q("#phoneSendBtn").click();
+  });
+  q("#codeInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") q("#codeBtn").click();
+  });
+
   /* ---------- ПАРОЛЬ 2FA ---------- */
 
   function showPassword() {
@@ -177,7 +262,7 @@
       if (!me.authed) {
         q("#qr-img").src = "";
         show("login");
-        loadQr();
+        switchLoginMethod(state.loginMethod);
         return;
       }
       q("#userName").textContent = (me.first + " " + me.last).trim() || "Аккаунт";

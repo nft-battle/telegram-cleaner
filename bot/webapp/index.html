@@ -18,14 +18,30 @@
   <section id="screen-login" class="screen">
     <div class="card">
       <h2>Вход в аккаунт</h2>
-      <p>Открой Telegram на телефоне → <b>Настройки</b> → <b>Устройства</b> → <b>Привязать устройство</b> и отсканируй код.</p>
+      <p>Подключи свой Telegram-аккаунт, чтобы чистить диалоги.</p>
+      <div class="login-tabs">
+        <button class="ltab active" id="tabQr">📱 QR-код</button>
+        <button class="ltab" id="tabPhone">☎️ По номеру</button>
+      </div>
     </div>
-    <div class="qr-wrap">
-      <div id="qr-holder"><img id="qr-img" alt="QR"></div>
-      <div class="qr-timer" id="qrTimer"></div>
+    <div id="loginQrBlock">
+      <div class="qr-wrap">
+        <div id="qr-holder"><img id="qr-img" alt="QR"></div>
+        <div class="qr-timer" id="qrTimer"></div>
+      </div>
+      <div id="qr-status" class="qr-status">Загружаю QR-код...</div>
+      <button class="btn ghost" id="qrRefreshBtn">🔄 Обновить код</button>
     </div>
-    <div id="qr-status" class="qr-status">Загружаю QR-код...</div>
-    <button class="btn ghost" id="qrRefreshBtn">🔄 Обновить код</button>
+    <div id="loginPhoneBlock" class="hidden">
+      <div class="card">
+        <p>Введи номер, привязанный к Telegram. Придёт код — введи его ниже.</p>
+        <input type="tel" id="phoneInput" inputmode="tel" placeholder="+79991234567">
+        <button class="btn" id="phoneSendBtn">📲 Получить код</button>
+        <input type="text" id="codeInput" inputmode="numeric" class="hidden" placeholder="Код из Telegram">
+        <button class="btn hidden" id="codeBtn">Войти</button>
+        <div id="phoneError" class="error hidden"></div>
+      </div>
+    </div>
   </section>
 
   <!-- ЭКРАН: пароль 2FA -->

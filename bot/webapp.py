@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 _qr_tasks: dict[int, asyncio.Task] = {}
 _qr_results: dict[int, str] = {}
+_phone_req: dict[int, str] = {}
 
 
 def _json(data, status: int = 200) -> web.Response:
@@ -122,6 +123,43 @@ async def api_login_password(request: web.Request) -> web.Response:
     return _json({"ok": True})
 
 
+async def api_login_phone(request: web.Request) -> web.Response:
+    user_id = _uid(request)
+    cleaner = _cl(user_id)
+    try:
+        payload = await request.json()
+    except Exception:
+        return _json({"ok": False, "error": "bad json"}, 400)
+    phone = str(payload.get("phone", "")).strip().replace(" ", "").replace("-", "")
+    if not phone.startswith("+"):
+        return _json({"ok": False, "error": "Номер должен начинаться с +"})
+    try:
+        await cleaner.send_code(phone)
+    except LoginError as exc:
+        return _json({"ok": False, "error": str(exc)})
+    _phone_req[user_id] = phone
+    return _json({"ok": True})
+
+
+async def api_login_code(request: web.Request) -> web.Response:
+    user_id = _uid(request)
+    cleaner = _cl(user_id)
+    try:
+        payload = await request.json()
+    except Exception:
+        return _json({"ok": False, "error": "bad json"}, 400)
+    phone = str(payload.get("phone", "") or _phone_req.get(user_id, "")).strip()
+    code = str(payload.get("code", "")).strip().replace(" ", "")
+    if not phone or not code:
+        return _json({"ok": False, "error": "Укажите телефон и код"})
+    try:
+        need_password = await cleaner.submit_code(phone, code)
+    except LoginError as exc:
+        return _json({"ok": False, "error": str(exc)})
+    _phone_req.pop(user_id, None)
+    return _json({"ok": True, "need_password": need_password})
+
+
 async def api_logout(request: web.Request) -> web.Response:
     await _cl(_uid(request)).logout()
     return _json({"ok": True})
@@ -187,6 +225,8 @@ def make_app() -> web.Application:
     app.router.add_get("/qr/refresh", api_qr_refresh)
     app.router.add_get("/qr/status", api_qr_status)
     app.router.add_post("/login/password", api_login_password)
+    app.router.add_post("/login/phone", api_login_phone)
+    app.router.add_post("/login/code", api_login_code)
     app.router.add_post("/logout", api_logout)
     app.router.add_get("/dialogs", api_dialogs)
     app.router.add_post("/remove", api_remove)
