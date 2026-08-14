@@ -20,6 +20,7 @@
 
   let state = {
     sort: "members",
+    filter: "all",
     rows: [],
     selected: new Set(),
     qrTimer: null,
@@ -231,8 +232,9 @@
 
   q("#backBtn").onclick = () => show("main");
   q("#selectAllBtn").onclick = () => {
-    if (state.selected.size === state.rows.length) state.selected.clear();
-    else state.rows.forEach((r) => state.selected.add(r.id));
+    const visible = visibleRows();
+    if (state.selected.size === visible.length && visible.length > 0) state.selected.clear();
+    else visible.forEach((r) => state.selected.add(r.id));
     renderList();
   };
 
@@ -245,6 +247,20 @@
     };
   });
 
+  document.querySelectorAll(".f-tab").forEach((btn) => {
+    btn.onclick = () => {
+      document.querySelectorAll(".f-tab").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      state.filter = btn.dataset.filter;
+      renderList();
+    };
+  });
+
+  function visibleRows() {
+    if (state.filter === "all") return state.rows;
+    return state.rows.filter((r) => r.kind === state.filter);
+  }
+
   async function loadList() {
     q("#list").innerHTML = '<div class="empty">Загрузка...</div>';
     try {
@@ -256,25 +272,36 @@
     }
   }
 
+  const SECTIONS = [
+    { key: "channel", title: "📢 Каналы" },
+    { key: "group", title: "👥 Группы" },
+    { key: "private", title: "💬 Личные сообщения" },
+  ];
+
   function renderList() {
     const list = q("#list");
-    if (!state.rows.length) {
-      list.innerHTML = '<div class="empty">📭 Диалогов нет</div>';
+    const visible = visibleRows();
+    if (!visible.length) {
+      list.innerHTML = '<div class="empty">📭 Ничего нет</div>';
     } else {
-      list.innerHTML = state.rows
-        .map((r) => {
-          const sel = state.selected.has(r.id);
-          const date = r.date ? new Date(r.date * 1000).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" }) : "—";
-          return `<div class="item${sel ? " selected" : ""}" data-id="${r.id}">
-            <div class="ic">${ICONS[r.kind] || "❓"}</div>
-            <div class="info">
-              <div class="title">${esc(r.title || r.id)}</div>
-              <div class="meta">👥 ${r.members} · 🔔 ${r.unread} · 🕒 ${date}</div>
-            </div>
-            <div class="check">✓</div>
-          </div>`;
-        })
-        .join("");
+      let html = "";
+      if (state.filter === "all") {
+        SECTIONS.forEach((sec) => {
+          const rows = visible.filter((r) => r.kind === sec.key);
+          if (!rows.length) return;
+          const selCount = rows.filter((r) => state.selected.has(r.id)).length;
+          html += `<div class="section-title"><span><b>${sec.title}</b> · ${rows.length}</span><span class="cnt">${selCount} выбр.</span></div>`;
+          html += rows.map((r) => itemHtml(r)).join("");
+        });
+        const other = visible.filter((r) => !SECTIONS.some((s) => s.key === r.kind));
+        if (other.length) {
+          html += `<div class="section-title"><span><b>❓ Прочее</b> · ${other.length}</span></div>`;
+          html += other.map((r) => itemHtml(r)).join("");
+        }
+      } else {
+        html += visible.map((r) => itemHtml(r)).join("");
+      }
+      list.innerHTML = html;
       list.querySelectorAll(".item").forEach((el) => {
         el.onclick = () => {
           const id = Number(el.dataset.id);
@@ -287,6 +314,21 @@
     const bar = q("#deleteBar");
     q("#delCount").textContent = "Выбрано: " + state.selected.size;
     bar.classList.toggle("hidden", state.selected.size === 0);
+    const selectBtn = q("#selectAllBtn");
+    selectBtn.textContent = state.selected.size ? "☑ " + state.selected.size : "☑";
+  }
+
+  function itemHtml(r) {
+    const sel = state.selected.has(r.id);
+    const date = r.date ? new Date(r.date * 1000).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" }) : "—";
+    return `<div class="item${sel ? " selected" : ""}" data-id="${r.id}">
+      <div class="ic">${ICONS[r.kind] || "❓"}</div>
+      <div class="info">
+        <div class="title">${esc(r.title || r.id)}</div>
+        <div class="meta">👥 ${r.members} · 🔔 ${r.unread} · 🕒 ${date}</div>
+      </div>
+      <div class="check">✓</div>
+    </div>`;
   }
 
   q("#deleteBtn").onclick = async () => {

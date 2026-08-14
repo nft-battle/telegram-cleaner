@@ -91,6 +91,21 @@ input:checked + .slider:before { transform:translateX(20px); }
 .tab { flex:1; padding:9px 0; background:none; border:none; color:var(--sub); font-size:15px; cursor:pointer; }
 .tab.active { background:var(--accent); color:#fff; }
 
+.filter-tabs { display:flex; gap:6px; margin-bottom:12px; align-items:center; flex-wrap:wrap; }
+.f-tab {
+  padding:7px 12px; border-radius:20px; border:1px solid var(--border);
+  background:var(--card); color:var(--sub); font-size:13px; cursor:pointer;
+}
+.f-tab.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+
+.section-title {
+  color:var(--sub); font-size:12px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.5px; margin:14px 2px 6px;
+  display:flex; justify-content:space-between;
+}
+.section-title b { color:var(--text); }
+.section-title .cnt { color:var(--accent); }
+
 .list { display:flex; flex-direction:column; gap:8px; }
 .item {
   background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
