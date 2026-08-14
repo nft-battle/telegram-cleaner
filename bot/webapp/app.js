@@ -192,12 +192,12 @@
 
   async function refreshStats() {
     const data = await api("/dialogs?user_id=" + USER_ID + "&sort=members");
+    state.rows = data.rows;
     const total = data.rows.length;
     const unread = data.rows.reduce((s, r) => s + (r.unread || 0), 0);
     q("#statTotal").textContent = total;
     q("#statUnread").textContent = unread;
-    q("#statRemoved").textContent = data.removed ?? "…";
-    q("#statRemoved").textContent = total; // placeholder until API supports
+    q("#statRemoved").textContent = data.removed ?? 0;
   }
 
   q("#autokillToggle").onchange = async (e) => {
@@ -225,7 +225,8 @@
 
   q("#listBtn").onclick = () => {
     state.selected.clear();
-    renderList();
+    loadList();
+    show("list");
   };
 
   q("#backBtn").onclick = () => show("main");
