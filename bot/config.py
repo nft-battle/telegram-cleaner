@@ -11,7 +11,10 @@ ADMIN_IDS: list[int] = [
     int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip().isdigit()
 ]
 DATABASE_URL: str = os.getenv("DATABASE_URL", "").strip()
-PORT: int = int(os.getenv("PORT", "10000"))
+PORT: int = int(os.getenv("PORT", "8080"))
 DB_PATH: str = os.getenv("DB_PATH", "cleaner_data.db").strip()
+WEBAPP_URL: str = os.getenv(
+    "WEBAPP_URL", "https://telegram-cleaner-klni.onrender.com/app"
+).strip()
 
 PAGE_SIZE = 6
